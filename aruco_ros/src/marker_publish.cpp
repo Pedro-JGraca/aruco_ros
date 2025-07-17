@@ -79,9 +79,8 @@ private:
   std::string camera_frame_;
   std::string reference_frame_;
   double marker_size_;
-  // BEGIN MY CODE
+
   std::map<int, double> marker_sizes_by_id_;
-  // END MY CODE
 
   // ROS pub-sub
   std::unique_ptr<image_transport::ImageTransport> it_;
@@ -224,14 +223,13 @@ public:
       // clear out previous detection results
       markers_.clear();
 
-      // BEGIN MY EDIT
       // // ok, let's detect
       // mDetector_.detect(inImage_, markers_, camParam_, marker_size_, false);
-      // END MY CODE
-      // BEGIN MY CODE
+
       mDetector_.detect(inImage_, markers_,camParam_,
-        -1,         // markerSize (-1 for not calculate pose)
+        -1,         // markerSize (-1 to not calculate pose)
         false); 
+
       for (auto& marker : markers_) {
         double size = marker_size_; // Default
         if (marker_sizes_by_id_.find(marker.id) != marker_sizes_by_id_.end()) {
@@ -242,7 +240,6 @@ public:
             marker.calculateExtrinsics(size, camParam_, false);
         }
       }
-      // END MY CODE
 
       // marker array publish
       if (publishMarkers) {
