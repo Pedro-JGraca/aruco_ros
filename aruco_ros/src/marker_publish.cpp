@@ -31,6 +31,10 @@
  * @date June 2014
  * @brief Modified copy of simple_single.cpp to publish all markers visible
  * (modified by Josh Langsfeld, 2014)
+ * (additional modifications by Pedro Jullian Medina Torres Graça, 07/17/2025: Added support for per-marker size specification
+ * through new parameter 'marker_sizes_by_id' (JSON-formatted string, e.g.: "{\"1\": 0.12, \"2\": 0.24}"),
+ * enabling detection of markers with different physical sizes in the same scene, where keys represent marker IDs
+ * and values represent their respective edge lengths in meters.)
  */
 
 #include <iostream>
@@ -54,6 +58,10 @@
 #include "tf2_ros/buffer.h"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
+// BEGIN MY CODE
+#include <nlohmann/json.hpp> 
+// END MY CODE
+
 using namespace std::chrono_literals;
 
 class ArucoMarkerPublisher : public rclcpp::Node
@@ -71,6 +79,9 @@ private:
   std::string camera_frame_;
   std::string reference_frame_;
   double marker_size_;
+  // BEGIN MY CODE
+  std::map<int, double> marker_sizes_by_id_;
+  // END MY CODE
 
   // ROS pub-sub
   std::unique_ptr<image_transport::ImageTransport> it_;
@@ -119,6 +130,25 @@ public:
         shared_from_this(), "/camera_info");
       RCLCPP_INFO(this->get_logger(), "Successfully obtained the camera info!");
 
+      // BEGIN MY CODE
+      this->declare_parameter<std::string>("marker_sizes_by_id","{}"); // Declarando o parâmetro como um "objeto genérico"
+      std::string marker_sizes_str;
+      this->get_parameter("marker_sizes_by_id", marker_sizes_str);
+      try {
+          nlohmann::json json_obj = nlohmann::json::parse(marker_sizes_str);
+          for (auto& [key, value] : json_obj.items()) {
+              try {
+                  int id = std::stoi(key);
+                  double size = value.get<double>();
+                  marker_sizes_by_id_[id] = size;
+              } catch (...) {
+                  RCLCPP_ERROR(this->get_logger(), "Erro ao converter ID/size: %s:%f", key.c_str(), value.get<double>());
+              }
+          }
+      } catch (const std::exception& e) {
+          RCLCPP_ERROR(this->get_logger(), "Erro ao parsear marker_sizes_by_id: %s", e.what());
+      }
+      // END MY CODE
       this->get_parameter_or<double>("marker_size", marker_size_, 0.05);
       this->get_parameter_or<bool>("image_is_rectified", useRectifiedImages_, true);
       this->get_parameter_or<std::string>("reference_frame", reference_frame_, "");
@@ -194,8 +224,25 @@ public:
       // clear out previous detection results
       markers_.clear();
 
-      // ok, let's detect
-      mDetector_.detect(inImage_, markers_, camParam_, marker_size_, false);
+      // BEGIN MY EDIT
+      // // ok, let's detect
+      // mDetector_.detect(inImage_, markers_, camParam_, marker_size_, false);
+      // END MY CODE
+      // BEGIN MY CODE
+      mDetector_.detect(inImage_, markers_,camParam_,
+        -1,         // markerSize (-1 for not calculate pose)
+        false); 
+      for (auto& marker : markers_) {
+        double size = marker_size_; // Default
+        if (marker_sizes_by_id_.find(marker.id) != marker_sizes_by_id_.end()) {
+            size = marker_sizes_by_id_[marker.id];
+        }
+        //RCLCPP_ERROR(this->get_logger(), "ID: %d <> Size: %.3f", marker.id, size);
+        if (camParam_.isValid() && size > 0) {
+            marker.calculateExtrinsics(size, camParam_, false);
+        }
+      }
+      // END MY CODE
 
       // marker array publish
       if (publishMarkers) {

@@ -1,3 +1,16 @@
+aruco_ros (modified fork)
+=========
+
+This is a fork of the original aruco_ros package with added support for per-marker size specification.
+
+**Key Modification:**
+- Added `marker_sizes_by_id` parameter (JSON string format) to allow different physical sizes for each marker ID
+- Example: `"{\"1\": 0.12, \"2\": 0.24}"` where 1 and 2 are marker IDs with sizes 0.12m and 0.24m respectively
+
+*Note: Current implementation uses JSON string parsing. Future plans include native JSON mapping support.*
+
+---
+
 aruco_ros
 =========
 
